@@ -7,6 +7,33 @@
 #    nginx_port_no_tls: 80
     nginx_port_crt: 443
   tasks:
+  
+    - name: Generate an OpenSSL private key with the default values (4096 bits, RSA)
+      become: false 
+      openssl_privatekey:
+        path: "./files/{{ inventory_hostname }}_priv.pem"
+      delegate_to: localhost
+    
+    - name: Generate an OpenSSL Certificate Signing Request with Subject information
+      become: false
+      openssl_csr:
+        path: "./files/{{ inventory_hostname }}.csr"
+        privatekey_path: "./files/{{ inventory_hostname }}_priv.pem"
+        country_name: RU
+        organization_name: university
+        email_address: lena@uven.ru
+        common_name: "{{ inventory_hostname }}"
+      delegate_to: localhost
+
+    - name: Generate a Self Signed OpenSSL certificate
+      become: false
+      openssl_certificate:
+        path: "./files/{{ inventory_hostname }}.crt"
+        privatekey_path: "./files/{{ inventory_hostname }}_priv.pem"
+        csr_path: "./files/{{ inventory_hostname }}.csr"
+        provider: selfsigned
+      delegate_to: localhost
+
     - name: create nginx repo definition
       copy:
         src: nginx.repo
@@ -21,28 +48,52 @@
         update_cache: true
         state: present
     - debug:
-        msg: "VM is {{ ansible_host }}"
+        msg: "VM is {{ inventory_hostname }}"
+    
+    - name: create dir /etc/ssl/private for .pem  key
+      ansible.builtin.file:
+        path: /etc/ssl/private
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: create dir /etc/ssl/crt  for .crt 
+      ansible.builtin.file:
+        path: /etc/ssl/crt
+        state: directory
+        owner: nginx
+        group: nginx
+        mode: '0755'
+
+    - name: create dir /etc/ssl/csr  for .csr
+      ansible.builtin.file:
+        path: /etc/ssl/csr
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'        
 
     - name: copy cert
       copy:
-        src: "{{ ansible_host }}.crt"
-        dest: "/etc/ssl/crt/{{ ansible_host }}.crt"
+        src: "{{ inventory_hostname }}.crt"
+        dest: "/etc/ssl/crt/{{ inventory_hostname }}.crt"
         owner: nginx
         group: nginx
         mode: 0444
 
     - name: copy private key
       copy:
-        src: "{{ ansible_host }}_priv.pem"
-        dest: "/etc/ssl/private/{{ ansible_host }}_priv.pem"
+        src: "{{ inventory_hostname }}_priv.pem"
+        dest: "/etc/ssl/private/{{ inventory_hostname }}_priv.pem"
         owner: root
         group: nginx 
         mode: 0440      
     
     - name: copy csr
       copy:
-        src: "{{ ansible_host }}.csr"
-        dest: "/etc/ssl/csr/{{ ansible_host }}.csr"
+        src: "{{ inventory_hostname }}.csr"
+        dest: "/etc/ssl/csr/{{ inventory_hostname }}.csr"
         owner: root
         group: nginx
         mode: 0440
@@ -93,9 +144,9 @@
   post_tasks:
     - name: check web site from control server
       uri:
-        url: "http://{{ ansible_host }}:{{ nginx_port_crt }}"
+        url: "https://{{ inventory_hostname }}:{{ nginx_port_crt }}"
         return_content: true
-      connection: local
+      #connection: local
       register: example_webpage_out
       failed_when: example_webpage_out.status != 200
 
