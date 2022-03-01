@@ -146,6 +146,7 @@
       uri:
         url: "https://{{ inventory_hostname }}:{{ nginx_port_crt }}"
         return_content: true
+        validate_certs: false
       #connection: local
       register: example_webpage_out
       failed_when: example_webpage_out.status != 200
